@@ -56,13 +56,6 @@
         "type":  "ipsw"
     },
     {
-        "model":  "iPhone10,2",
-        "version":  "16.1",
-        "build":  "20B82",
-        "url":  "https://updates.cdn-apple.com/2022FallFCS/fullrestores/012-92824/BF812783-3E5D-4B9A-890D-E89A47942D44/iPhone_5.5_P3_16.1_20B82_Restore.ipsw",
-        "type":  "ipsw"
-    },
-    {
         "model":  "iPhone10,3",
         "version":  "16.4.1",
         "build":  "20E252",
@@ -298,13 +291,6 @@
         "version":  "16.5.1",
         "build":  "20F75",
         "url":  "https://updates.cdn-apple.com/2023SpringFCS/fullrestores/042-02106/B9658E57-8FC6-4528-9853-42C21A785755/iPhone10,3,iPhone10,6_16.5.1_20F75_Restore.ipsw",
-        "type":  "ipsw"
-    },
-    {
-        "model":  "iPhone10,6",
-        "version":  "16.6",
-        "build":  "20G75",
-        "url":  "https://updates.cdn-apple.com/2023SummerFCS/fullrestores/042-17165/EBF36414-DFF7-4FDD-9FD7-8B6465E3A208/iPhone10,3,iPhone10,6_16.6_20G75_Restore.ipsw",
         "type":  "ipsw"
     },
     {
@@ -1254,13 +1240,6 @@
     },
     {
         "model":  "iPhone13,4",
-        "version":  "16.1",
-        "build":  "20B82",
-        "url":  "https://updates.cdn-apple.com/2022FallFCS/fullrestores/012-93079/DAB60EEB-B686-4CB7-99AF-AC15DC24006A/iPhone13,4_16.1_20B82_Restore.ipsw",
-        "type":  "ipsw"
-    },
-    {
-        "model":  "iPhone13,4",
         "version":  "16.1.1",
         "build":  "20B101",
         "url":  "https://updates.cdn-apple.com/2022FallFCS/fullrestores/012-96692/94B5A256-5B66-4204-99F5-E51069751A4D/iPhone13,4_16.1.1_20B101_Restore.ipsw",
@@ -1306,13 +1285,6 @@
         "version":  "16.6.1",
         "build":  "20G81",
         "url":  "https://updates.cdn-apple.com/2023SummerFCS/fullrestores/042-43876/2C3F20C0-E72A-415D-BC63-33129BABC356/iPhone13,4_16.6.1_20G81_Restore.ipsw",
-        "type":  "ipsw"
-    },
-    {
-        "model":  "iPhone14,2",
-        "version":  "16.0",
-        "build":  "20A362",
-        "url":  "https://updates.cdn-apple.com/2022FallFCS/fullrestores/012-65747/591A05A2-E535-4228-8F2B-ADA395C72D77/iPhone14,2_16.0_20A362_Restore.ipsw",
         "type":  "ipsw"
     },
     {
@@ -1369,13 +1341,6 @@
         "version":  "16.5.1",
         "build":  "20F75",
         "url":  "https://updates.cdn-apple.com/2023SpringFCS/fullrestores/042-02777/1C33CB6E-FD3B-49A2-BD89-23749FEF97C2/iPhone14,6_16.5.1_20F75_Restore.ipsw",
-        "type":  "ipsw"
-    },
-    {
-        "model":  "iPhone14,6",
-        "version":  "16.6",
-        "build":  "20G75",
-        "url":  "https://updates.cdn-apple.com/2023SummerFCS/fullrestores/042-17934/F5057758-6F19-4EFE-AA40-0D724C76713C/iPhone14,6_16.6_20G75_Restore.ipsw",
         "type":  "ipsw"
     },
     {
@@ -1439,13 +1404,6 @@
         "version":  "16.3.1",
         "build":  "20D67",
         "url":  "https://updates.cdn-apple.com/2023WinterFCS/fullrestores/032-49700/403A6142-5C40-4BF4-948B-75E11F1CF60E/iPhone14,7_16.3.1_20D67_Restore.ipsw",
-        "type":  "ipsw"
-    },
-    {
-        "model":  "iPhone14,7",
-        "version":  "16.4",
-        "build":  "20E247",
-        "url":  "https://updates.cdn-apple.com/2023SpringFCS/fullrestores/032-68785/C1C23EE4-ABC6-487A-842C-BB16F3E89EB7/iPhone14,7_16.4_20E247_Restore.ipsw",
         "type":  "ipsw"
     },
     {
@@ -1779,13 +1737,6 @@
     },
     {
         "model":  "iPhone8,2",
-        "version":  "15.7.9",
-        "build":  "19H365",
-        "url":  "https://updates.cdn-apple.com/2023WinterFCS/fullrestores/042-45473/3CD38874-DFBB-4B99-BC8D-3C04FD92B547/iPhone_5.5_15.7.9_19H365_Restore.ipsw",
-        "type":  "ipsw"
-    },
-    {
-        "model":  "iPhone8,2",
         "version":  "15.8",
         "build":  "19H370",
         "url":  "https://updates.cdn-apple.com/2023FallFCS/fullrestores/042-76338/0D898C88-1E03-42FD-A160-93DDEDD358FA/iPhone_5.5_15.8_19H370_Restore.ipsw",
@@ -2101,13 +2052,6 @@
     },
     {
         "model":  "iPhone9,2",
-        "version":  "15.8.6",
-        "build":  "19H402",
-        "url":  "https://updates.cdn-apple.com/2025SpringFCS/fullrestores/047-40924/686B57C7-DF49-4350-89B6-FB79292222A8/iPhone_5.5_P3_15.8.6_19H402_Restore.ipsw",
-        "type":  "ipsw"
-    },
-    {
-        "model":  "iPhone9,2",
         "version":  "15.8.7",
         "build":  "19H411",
         "url":  "https://updates.cdn-apple.com/2025FallFCS/fullrestores/047-95166/1E95A58B-CDFA-4868-AD6D-8E469CEEC722/iPhone_5.5_P3_15.8.7_19H411_Restore.ipsw",
@@ -2272,13 +2216,6 @@
         "version":  "15.7.8",
         "build":  "19H364",
         "url":  "https://updates.cdn-apple.com/2023WinterFCS/fullrestores/042-11219/E6871AA1-4B1B-4AE4-BBB6-72B1B4170B48/iPhone_5.5_P3_15.7.8_19H364_Restore.ipsw",
-        "type":  "ipsw"
-    },
-    {
-        "model":  "iPhone9,4",
-        "version":  "15.7.9",
-        "build":  "19H365",
-        "url":  "https://updates.cdn-apple.com/2023WinterFCS/fullrestores/042-45552/065E848A-4D74-4016-9B94-B57232B594C3/iPhone_5.5_P3_15.7.9_19H365_Restore.ipsw",
         "type":  "ipsw"
     },
     {
