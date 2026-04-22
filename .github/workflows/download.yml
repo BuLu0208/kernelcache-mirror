@@ -1,33 +1,80 @@
+# Workflow 名称：下载内核缓存文件
 name: Download Kernelcaches
 
+# 触发条件：
+# - workflow_dispatch: 允许手动触发
+# - schedule: 每周一 00:00 UTC 自动运行
 on:
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * 1'
 
 jobs:
+  # 定义下载任务
   download:
+    # 运行环境：最新版 Ubuntu
     runs-on: ubuntu-latest
+    # 权限：需要写入仓库内容（用于创建 Release 和上传文件）
     permissions:
       contents: write
     steps:
+      # 步骤1：检出仓库代码（以便访问 scripts 目录等）
       - uses: actions/checkout@v4
 
+      # 步骤2：安装 Python 依赖（requests 库用于下载脚本）
       - name: Install dependencies
         run: pip install requests
 
+      # 步骤3：运行下载脚本（生成 kernelcache 文件到 output 目录）
       - name: Download kernelcaches
         run: python3 scripts/download_kernelcaches.py
 
-      - name: Pack and upload
+      # 步骤4：将下载的文件上传到 GitHub Release
+      - name: Upload to Release
         env:
+          # 使用 GitHub 自动提供的 GITHUB_TOKEN 进行身份验证
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd output
-          zip -r ../kernelcaches.zip .
-          cd ..
+          # 生成日期标签（格式：20250203）
           DATE=$(date +%Y%m%d)
+          
+          # 删除同名的旧 Release（如果存在），忽略错误（避免首次运行失败）
           gh release delete "kernelcache-$DATE" --yes 2>/dev/null || true
-          gh release create "kernelcache-$DATE" kernelcaches.zip \
+          
+          # 统计 output 目录下所有名为 "kernelcache" 的文件数量
+          FILE_COUNT=$(find output -name "kernelcache" -type f | wc -l)
+          echo "Uploading $FILE_COUNT kernelcache files..."
+          
+          # 创建新的 Release，标题包含日期，描述中包含文件总数
+          gh release create "kernelcache-$DATE" \
             --title "Kernelcaches $DATE" \
-            --notes "Auto-generated kernelcache files"
+            --notes "iOS 15.7.2-16.6.1 kernelcache files. Total: $FILE_COUNT files."
+          
+          # 进入 output 目录，遍历所有 kernelcache 文件
+          cd output
+          find . -name "kernelcache" -type f | while read f; do
+            # 从路径中提取设备型号（第二级目录）和 iOS 版本（第三级目录）
+            MODEL=$(echo "$f" | cut -d'/' -f2)
+            VERSION=$(echo "$f" | cut -d'/' -f3)
+            # 重命名文件：格式为 "型号_版本.kernelcache"，避免上传时路径冲突
+            RENAME="${MODEL}_${VERSION}.kernelcache"
+            # 复制到临时目录
+            cp "$f" "/tmp/$RENAME"
+            # 获取文件大小（人类可读格式）
+            SIZE=$(du -h "/tmp/$RENAME" | cut -f1)
+            echo "  Uploading $RENAME ($SIZE)..."
+            # 将文件上传到对应的 Release（--clobber 覆盖同名文件）
+            gh release upload "kernelcache-$DATE" "/tmp/$RENAME" --clobber
+            # 清理临时文件
+            rm "/tmp/$RENAME"
+          done
+          
+          # 如果存在 index.json（索引文件），也一并上传
+          if [ -f index.json ]; then
+            echo "  Uploading index.json..."
+            gh release upload "kernelcache-$DATE" "index.json" --clobber
+          fi
+          
+          # 输出完成提示
+          echo ""
+          echo "All uploads complete!"
