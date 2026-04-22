@@ -7,26 +7,20 @@ Output: firmware_list.json
 import json
 import lzma
 import requests
-import re
 
 API_BASE = "https://api.appledb.dev/ios/main.json.xz"
 OUTPUT = "firmware_list.json"
 SKIP_HOSTS = ["adcdownload.apple.com", "download.developer.apple.com"]
 
 def ver_tuple(v):
-    # Strip prefix like "iOS " or "iPadOS "
-    v = re.sub(r'^(iOS|iPadOS|macOS)\s+', '', v).strip()
     try:
-        return tuple(int(x) for x in v.split(".")[:3])
+        return tuple(int(x) for x in str(v).split(".")[:3])
     except:
         return (0,)
 
 def in_range(v):
     vt = ver_tuple(v)
     return (15, 7, 2) <= vt <= (16, 6, 1)
-
-def clean_version(v):
-    return re.sub(r'^(iOS|iPadOS|macOS)\s+', '', v).strip()
 
 print("Downloading firmware list from api.appledb.dev...")
 r = requests.get(API_BASE, timeout=120)
@@ -36,22 +30,25 @@ data = lzma.decompress(r.content)
 fw_list = json.loads(data)
 print("Parsed %d firmware entries" % len(fw_list))
 
-# Debug: show sample osStr values
-samples = set()
-for fw in fw_list[:500]:
-    os_str = fw.get("osStr", "")
-    if os_str:
-        samples.add(os_str)
-print("Sample osStr values: %s" % sorted(list(samples))[:20])
+# Debug: check field names from first entry
+if fw_list:
+    print("First entry keys: %s" % list(fw_list[0].keys()))
+    print("First entry: %s" % json.dumps(fw_list[0], indent=2, ensure_ascii=False)[:500])
 
 result = []
 seen = set()
 
 for fw in fw_list:
-    os_str = fw.get("osStr", "")
+    # Try different possible field names for version
+    version = fw.get("version") or fw.get("osStr", "")
     build = fw.get("build", "")
+    os_type = fw.get("osType", "")
 
-    if not in_range(os_str):
+    # Include iOS and iPadOS
+    if os_type and os_type not in ("iOS", "iPadOS"):
+        continue
+
+    if not in_range(version):
         continue
 
     for source in fw.get("sources", []):
@@ -70,7 +67,6 @@ for fw in fw_list:
 
             models = source.get("deviceMap", [])
             fw_type = source.get("type", "")
-            version = clean_version(os_str)
 
             for model in models:
                 key = (model, build)
@@ -79,7 +75,7 @@ for fw in fw_list:
                 seen.add(key)
                 result.append({
                     "model": model,
-                    "version": version,
+                    "version": str(version),
                     "build": build,
                     "url": url,
                     "type": fw_type,
@@ -91,17 +87,17 @@ if result:
     result.sort(key=lambda x: (x["model"], ver_tuple(x["version"])))
     print("Sample entries:")
     for r in result[:5]:
-        print("  %s %s (%s) %s" % (r["model"], r["version"], r["build"], r["url"][:60]))
+        print("  %s %s (%s) %s" % (r["model"], r["version"], r["build"], r["url"][:80]))
 else:
     print("WARNING: No entries found!")
-    # Show what versions exist around our range
-    near = []
+    # Show what version values exist
+    versions = set()
     for fw in fw_list:
-        os_str = fw.get("osStr", "")
-        vt = ver_tuple(os_str)
-        if (15, 0) <= vt <= (17, 0):
-            near.append(os_str)
-    print("Versions in 15.x-17.x range: %s" % sorted(set(near))[:30])
+        v = fw.get("version") or fw.get("osStr", "")
+        ot = fw.get("osType", "")
+        if ot == "iOS" or "iPhone" in str(fw.get("osStr", "")):
+            versions.add("%s (%s)" % (v, ot))
+    print("iOS versions found: %s" % sorted(list(versions))[:30])
 
 with open(OUTPUT, "w", encoding="utf-8") as f:
     json.dump(result, f, ensure_ascii=False, indent=2)
