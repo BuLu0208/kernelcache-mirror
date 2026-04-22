@@ -11,9 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: pip install requests lzma
-
       - name: Fetch firmware list
         run: python3 scripts/fetch_firmware.py
 
