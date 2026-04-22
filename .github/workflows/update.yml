@@ -1,0 +1,26 @@
+name: Update Firmware List
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 1'  # Every Monday
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install requests lzma
+
+      - name: Fetch firmware list
+        run: python3 scripts/fetch_firmware.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add firmware_list.json
+          git diff --cached --quiet || git commit -m "Update firmware list $(date +%Y-%m-%d)"
+          git push
