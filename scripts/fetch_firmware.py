@@ -7,12 +7,15 @@ Output: firmware_list.json
 import json
 import lzma
 import requests
+import re
 
 API_BASE = "https://api.appledb.dev/ios/main.json.xz"
 OUTPUT = "firmware_list.json"
 SKIP_HOSTS = ["adcdownload.apple.com", "download.developer.apple.com"]
 
 def ver_tuple(v):
+    # Strip prefix like "iOS " or "iPadOS "
+    v = re.sub(r'^(iOS|iPadOS|macOS)\s+', '', v).strip()
     try:
         return tuple(int(x) for x in v.split(".")[:3])
     except:
@@ -22,13 +25,24 @@ def in_range(v):
     vt = ver_tuple(v)
     return (15, 7, 2) <= vt <= (16, 6, 1)
 
+def clean_version(v):
+    return re.sub(r'^(iOS|iPadOS|macOS)\s+', '', v).strip()
+
 print("Downloading firmware list from api.appledb.dev...")
 r = requests.get(API_BASE, timeout=120)
-print(f"Downloaded {len(r.content)} bytes")
+print("Downloaded %d bytes" % len(r.content))
 
 data = lzma.decompress(r.content)
 fw_list = json.loads(data)
-print(f"Parsed {len(fw_list)} firmware entries")
+print("Parsed %d firmware entries" % len(fw_list))
+
+# Debug: show sample osStr values
+samples = set()
+for fw in fw_list[:500]:
+    os_str = fw.get("osStr", "")
+    if os_str:
+        samples.add(os_str)
+print("Sample osStr values: %s" % sorted(list(samples))[:20])
 
 result = []
 seen = set()
@@ -56,6 +70,7 @@ for fw in fw_list:
 
             models = source.get("deviceMap", [])
             fw_type = source.get("type", "")
+            version = clean_version(os_str)
 
             for model in models:
                 key = (model, build)
@@ -64,23 +79,31 @@ for fw in fw_list:
                 seen.add(key)
                 result.append({
                     "model": model,
-                    "version": os_str,
+                    "version": version,
                     "build": build,
                     "url": url,
                     "type": fw_type,
                 })
 
-print(f"Filtered to {len(result)} unique model+build entries")
+print("Filtered to %d unique model+build entries" % len(result))
 
-# Sort by model, then version
-result.sort(key=lambda x: (x["model"], ver_tuple(x["version"])))
+if result:
+    result.sort(key=lambda x: (x["model"], ver_tuple(x["version"])))
+    print("Sample entries:")
+    for r in result[:5]:
+        print("  %s %s (%s) %s" % (r["model"], r["version"], r["build"], r["url"][:60]))
+else:
+    print("WARNING: No entries found!")
+    # Show what versions exist around our range
+    near = []
+    for fw in fw_list:
+        os_str = fw.get("osStr", "")
+        vt = ver_tuple(os_str)
+        if (15, 0) <= vt <= (17, 0):
+            near.append(os_str)
+    print("Versions in 15.x-17.x range: %s" % sorted(set(near))[:30])
 
 with open(OUTPUT, "w", encoding="utf-8") as f:
     json.dump(result, f, ensure_ascii=False, indent=2)
 
-print(f"Saved to {OUTPUT}")
-
-# Stats
-models = set(r["model"] for r in result)
-versions = set(r["version"] for r in result)
-print(f"Models: {len(models)}, Versions: {len(versions)}")
+print("Saved to %s" % OUTPUT)
