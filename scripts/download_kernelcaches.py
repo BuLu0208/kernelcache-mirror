@@ -3,6 +3,11 @@
 Download kernelcaches from Apple CDN using firmware_list.json
 Runs on GitHub Actions (Python 3.10+, no SSL issues)
 Output: output/{model}/{version}/kernelcache
+
+Usage:
+  python3 download_kernelcaches.py                    # download all
+  python3 download_kernelcaches.py --filter iphone     # iPhone only
+  python3 download_kernelcaches.py --filter ipad       # iPad only
 """
 
 import os
@@ -11,8 +16,18 @@ import struct
 import zlib
 import sys
 import time
+import argparse
+import fnmatch
 
 OUTPUT_DIR = "output"
+
+def is_iphone(model):
+    """Check if a model identifier is an iPhone"""
+    return model.startswith("iPhone")
+
+def is_ipad(model):
+    """Check if a model identifier is an iPad"""
+    return model.startswith("iPad")
 
 def log(msg):
     print("[%s] %s" % (time.strftime("%H:%M:%S"), msg), flush=True)
@@ -59,7 +74,6 @@ def find_kernelcache_in_zip(url):
 
     if raw_cd_off == 0xFFFFFFFF or raw_cd_sz == 0xFFFFFFFF:
         log("  ZIP64 format")
-        # Find Zip64 EOCD Locator
         locator_pos = tail.rfind(b'\x50\x4b\x06\x07')
         if locator_pos == -1:
             return None
@@ -89,8 +103,7 @@ def find_kernelcache_in_zip(url):
         cd_data += r.content
         pos = chunk_end
 
-    # Parse central directory entries
-    # Format: 4sHHHHHHIIIHHHHHII (17 values, 46 bytes)
+    # Parse central directory entries: <4sHHHHHHIIIHHHHHII> = 17 values, 46 bytes
     p = 0
     while p < len(cd_data) - 46:
         if cd_data[p:p+4] != b'\x50\x4b\x01\x02':
@@ -114,7 +127,7 @@ def find_kernelcache_in_zip(url):
             p += 46 + name_len + extra_len
             continue
 
-        # Read ZIP64 extra field if needed
+        # Read ZIP64 extra field
         local_off = local_off_raw
         comp_size = comp_size_raw
         if extra_len > 0:
@@ -125,14 +138,11 @@ def find_kernelcache_in_zip(url):
                 esz = struct.unpack_from('<H', extra_data, ei+2)[0]
                 if eid == 0x0001:  # ZIP64 extended info
                     off2 = ei + 4
-                    # Uncompressed size (8) - always present in ZIP64 ext info
                     if off2 + 8 <= ei + 4 + esz:
                         off2 += 8
-                    # Compressed size (8)
                     if comp_size_raw == 0xFFFFFFFF and off2 + 8 <= ei + 4 + esz:
                         comp_size = struct.unpack_from('<Q', extra_data, off2)[0]
                         off2 += 8
-                    # Local header offset (8)
                     if local_off_raw == 0xFFFFFFFF and off2 + 8 <= ei + 4 + esz:
                         local_off = struct.unpack_from('<Q', extra_data, off2)[0]
                 ei += 4 + esz
@@ -141,7 +151,7 @@ def find_kernelcache_in_zip(url):
             p += 46 + name_len + extra_len
             continue
 
-        # Get local file header to find actual data offset
+        # Get local file header for data offset
         r = requests.get(url, headers={"Range": "bytes=%d-%d" % (local_off, local_off + 255)},
                          timeout=30, allow_redirects=True)
         lh = r.content
@@ -150,8 +160,6 @@ def find_kernelcache_in_zip(url):
         data_offset = local_off + 30 + lh_name_len + lh_extra_len
 
         return (filename, method, comp_size, data_offset)
-
-        p += 46 + name_len + extra_len
 
     return None
 
@@ -169,7 +177,6 @@ def download_one(url, output_path):
     method_str = "DEFLATE" if method == 8 else "STORE"
     log("  %s (%.1f MB, %s)" % (filename, comp_size / 1024.0 / 1024.0, method_str))
 
-    # Download with progress
     log("  Downloading...")
     r = requests.get(url,
                      headers={"Range": "bytes=%d-%d" % (data_offset, data_offset + comp_size - 1)},
@@ -203,6 +210,11 @@ def download_one(url, output_path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Download kernelcaches")
+    parser.add_argument("--filter", choices=["iphone", "ipad"], default=None,
+                        help="Only download iPhone or iPad kernelcaches")
+    args = parser.parse_args()
+
     json_file = "firmware_list.json"
     if not os.path.exists(json_file):
         print("firmware_list.json not found!")
@@ -210,6 +222,11 @@ def main():
 
     with open(json_file, 'r', encoding='utf-8') as f:
         firmwares = json.load(f)
+
+    # Filter by device type if requested
+    if args.filter:
+        firmwares = [fw for fw in firmwares if (is_iphone(fw["model"]) if args.filter == "iphone" else is_ipad(fw["model"]))]
+        log("Filtered to %d %s entries" % (len(firmwares), args.filter))
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -246,6 +263,7 @@ def main():
     # Generate index
     log("Generating index...")
     index = []
+    total_size = 0
     for root, dirs, files in os.walk(OUTPUT_DIR):
         for f in files:
             if f == "kernelcache":
@@ -253,10 +271,16 @@ def main():
                 rel = os.path.relpath(full, OUTPUT_DIR).replace("\\", "/")
                 parts = rel.split("/")
                 if len(parts) >= 2:
+                    sz = os.path.getsize(full)
+                    total_size += sz
                     index.append({
                         "model": parts[0],
                         "version": parts[1],
-                        "size": os.path.getsize(full),
+                        "size": sz,
+                        "url": "https://github.com/BuLu0208/kernelcache-mirror/releases/download/%s/%s_%s.kernelcache" % (
+                            "iphone-kernelcache" if is_iphone(parts[0]) else "ipad-kernelcache",
+                            parts[0], parts[1]
+                        ),
                     })
 
     with open(os.path.join(OUTPUT_DIR, "index.json"), 'w', encoding='utf-8') as f:
@@ -265,28 +289,20 @@ def main():
     log("")
     log("=" * 55)
     log("  Done! OK:%d Skip:%d Fail:%d" % (success, skip, fail))
-    log("  %d files" % len(index))
+    log("  %d files, total %.1f GB" % (len(index), total_size / 1024.0 / 1024.0 / 1024.0))
     log("=" * 55)
 
-    # List failed entries
+    # Save failed list
     failed = []
-    for i, fw in enumerate(firmwares):
-        model = fw["model"]
-        version = fw["version"]
-        path = os.path.join(OUTPUT_DIR, model, version, "kernelcache")
+    for fw in firmwares:
+        path = os.path.join(OUTPUT_DIR, fw["model"], fw["version"], "kernelcache")
         if not os.path.exists(path) or os.path.getsize(path) < 100 * 1024:
             failed.append(fw)
-    
+
     if failed:
-        log("")
-        log("Failed entries (%d):" % len(failed))
-        for f in failed:
-            log("  %s %s (%s)" % (f["model"], f["version"], f["build"]))
-        
-        # Save failed list for reference
-        with open("failed.json", 'w', encoding='utf-8') as f:
+        with open("failed_%s.json" % (args.filter or "all"), 'w', encoding='utf-8') as f:
             json.dump(failed, f, ensure_ascii=False, indent=2)
-        log("Failed list saved to failed.json")
+        log("Failed entries (%d) saved to failed_%s.json" % (len(failed), args.filter or "all"))
 
 if __name__ == "__main__":
     main()
