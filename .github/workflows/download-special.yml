@@ -1,0 +1,61 @@
+name: Download Special Version Kernelcaches
+
+on:
+  workflow_dispatch:
+
+jobs:
+  download-iphone:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Fetch special version list
+        run: python3 scripts/fetch_special.py
+
+      - name: Download and upload iPhone special kernelcaches
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/download_special.py --type iphone
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: special-iphone-logs
+          path: |
+            index_special_iphone.json
+            firmware_list_special.json
+            failed_special_iphone.json
+
+  download-ipad:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Fetch special version list
+        run: python3 scripts/fetch_special.py
+
+      - name: Download and upload iPad special kernelcaches
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/download_special.py --type ipad
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: special-ipad-logs
+          path: |
+            index_special_ipad.json
+            firmware_list_special.json
+            failed_special_ipad.json

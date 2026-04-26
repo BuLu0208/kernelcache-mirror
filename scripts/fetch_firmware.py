@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Fetch firmware list from api.appledb.dev for iOS 15.7.2-16.6.1
 Output: firmware_list.json
@@ -6,6 +6,7 @@ Output: firmware_list.json
 
 import json
 import lzma
+import re
 import requests
 
 API_BASE = "https://api.appledb.dev/ios/main.json.xz"
@@ -14,7 +15,8 @@ SKIP_HOSTS = ["adcdownload.apple.com", "download.developer.apple.com"]
 
 def ver_tuple(v):
     try:
-        return tuple(int(x) for x in str(v).split(".")[:3])
+        clean = re.sub(r'\([a-z]\)', '', str(v))
+        return tuple(int(x) for x in clean.split(".")[:3])
     except:
         return (0,)
 
