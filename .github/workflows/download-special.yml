@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  download-iphone:
+  add-aliases-iphone:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -14,25 +14,12 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Fetch special version list
-        run: python3 scripts/fetch_special.py
-
-      - name: Download and upload iPhone special kernelcaches
+      - name: Add iPhone special version aliases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 scripts/download_special.py --type iphone
+        run: python3 scripts/add_special_aliases.py --type iphone
 
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: special-iphone-logs
-          path: |
-            index_special_iphone.json
-            firmware_list_special.json
-            failed_special_iphone.json
-
-  download-ipad:
+  add-aliases-ipad:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -42,20 +29,7 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Fetch special version list
-        run: python3 scripts/fetch_special.py
-
-      - name: Download and upload iPad special kernelcaches
+      - name: Add iPad special version aliases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 scripts/download_special.py --type ipad
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: special-ipad-logs
-          path: |
-            index_special_ipad.json
-            firmware_list_special.json
-            failed_special_ipad.json
+        run: python3 scripts/add_special_aliases.py --type ipad
