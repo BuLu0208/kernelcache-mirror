@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """
-Fetch SPECIAL firmware entries (versions with (a), (b), (c) suffixes)
-from api.appledb.dev for iOS 15.7.2-16.6.1 range.
-These are Rapid Security Response builds that were missed previously.
+Generate alias entries for special iOS versions (16.4.1(a), 16.4.1(b), etc.)
+These RSR versions share the same kernelcache as their base version.
 
 Outputs:
-  - firmware_list_special.json  (raw data from appledb)
-  - index_special_iphone.json   (merged into index_iphone.json format)
-  - index_special_ipad.json     (merged into index_ipad.json format)
+  - new_entries_iphone.json  (entries to merge into index_iphone.json)
+  - new_entries_ipad.json    (entries to merge into index_ipad.json)
 """
 
 import json
@@ -16,143 +14,144 @@ import re
 import requests
 
 API_BASE = "https://api.appledb.dev/ios/main.json.xz"
-SKIP_HOSTS = ["adcdownload.apple.com", "download.developer.apple.com"]
-
-def ver_tuple(v):
-    """Parse version, stripping (a)/(b)/(c) suffixes"""
-    try:
-        clean = re.sub(r'\([a-z]\)', '', str(v))
-        return tuple(int(x) for x in clean.split(".")[:3])
-    except:
-        return (0,)
-
-def is_special(v):
-    """Check if version has a letter suffix like (a), (b), (c)"""
-    return bool(re.search(r'\([a-z]\)', str(v)))
-
-def in_range(v):
-    vt = ver_tuple(v)
-    return (15, 7, 2) <= vt <= (16, 6, 1)
 
 def model_to_filename(model):
-    """iPhone12,8 -> iPhone12.8"""
     return model.replace(",", ".")
 
 print("Downloading firmware list from api.appledb.dev...")
 r = requests.get(API_BASE, timeout=120)
-print("Downloaded %d bytes" % len(r.content))
-
 data = lzma.decompress(r.content)
 fw_list = json.loads(data)
-print("Parsed %d firmware entries" % len(fw_list))
+print("Parsed %d entries" % len(fw_list))
 
-result = []
-seen = set()
+# Step 1: Collect all special iOS/iPadOS versions and their base build
+# appledb format: version="16.4.1 (a)", build="20E772520a", sources[].prerequisiteBuild="20E252"
+special_versions = {}  # version -> { build, prereq_build, models: set }
 
 for fw in fw_list:
-    version = fw.get("version") or fw.get("osStr", "")
+    version = str(fw.get("version") or fw.get("osStr", ""))
     build = fw.get("build", "")
     os_type = fw.get("osType", "")
 
-    if os_type and os_type not in ("iOS", "iPadOS"):
+    if os_type not in ("iOS", "iPadOS"):
         continue
 
-    if not is_special(version):
+    # Match "16.4.1 (a)", "16.5.1 (c)", etc. (with space before parenthesis)
+    if not re.search(r'\s\([a-z]\)\s*$', version):
         continue
 
-    if not in_range(version):
-        continue
+    # Clean version: "16.4.1 (a)" -> "16.4.1(a)" (remove space for our index format)
+    clean_version = re.sub(r'\s\(([a-z])\)', r'(\1)', version)
 
     for source in fw.get("sources", []):
-        if source.get("prerequisiteBuild"):
+        prereq_build = source.get("prerequisiteBuild", "")
+        if not prereq_build:
             continue
 
-        for link in source.get("links", []):
-            url = link.get("url", "")
-            if not url or not link.get("active"):
-                continue
-
-            from urllib.parse import urlparse
-            host = urlparse(url).hostname
-            if host in SKIP_HOSTS:
-                continue
-
-            models = source.get("deviceMap", [])
-            fw_type = source.get("type", "")
-
-            for model in models:
-                key = (model, build)
-                if key in seen:
-                    continue
-                seen.add(key)
-                result.append({
-                    "model": model,
-                    "version": str(version),
+        models = source.get("deviceMap", [])
+        for model in models:
+            if clean_version not in special_versions:
+                special_versions[clean_version] = {
                     "build": build,
-                    "url": url,
-                    "type": fw_type,
-                })
-
-print("Found %d special version entries (unique model+build)" % len(result))
-
-# Summary
-versions_found = {}
-for entry in result:
-    v = entry["version"]
-    if v not in versions_found:
-        versions_found[v] = {"build": entry["build"], "models": set()}
-    versions_found[v]["models"].add(entry["model"])
+                    "prereq_build": prereq_build,
+                    "models": set()
+                }
+            special_versions[clean_version]["models"].add(model)
 
 print("\nSpecial versions found:")
-for v in sorted(versions_found.keys()):
-    info = versions_found[v]
-    iphones = [m for m in info["models"] if m.startswith("iPhone")]
-    ipads = [m for m in info["models"] if m.startswith("iPad")]
+for v, info in sorted(special_versions.items()):
+    iphones = len([m for m in info["models"] if m.startswith("iPhone")])
+    ipads = len([m for m in info["models"] if m.startswith("iPad")])
     parts = []
-    if iphones:
-        parts.append("%d iPhone" % len(iphones))
-    if ipads:
-        parts.append("%d iPad" % len(ipads))
-    print("  %s (build %s): %s" % (v, info["build"], ", ".join(parts)))
+    if iphones: parts.append("%d iPhone" % iphones)
+    if ipads: parts.append("%d iPad" % ipads)
+    print("  %s (build %s, base build %s): %s" % (v, info["build"], info["prereq_build"], ", ".join(parts)))
 
-# Save raw list
-with open("firmware_list_special.json", "w", encoding="utf-8") as f:
-    json.dump(result, f, ensure_ascii=False, indent=2)
-print("\nSaved firmware_list_special.json")
+# Step 2: Download existing index files to get base version kernelcache info
+iphone_index = []
+ipad_index = []
 
-# Generate index entries (matching existing index format)
-# Format: {"model": "iPhone12,8", "version": "16.4.1(a)", "build": "20E252", "url": "...", "size": 0}
-# size will be filled after download; url will be the proxy URL pattern
+for tag, target in [("iphone-kernelcache", iphone_index), ("ipad-kernelcache", ipad_index)]:
+    url = "https://github.com/BuLu0208/kernelcache-mirror/releases/download/%s/index_%s.json" % (tag, tag.split("-")[0])
+    try:
+        r = requests.get(url, timeout=60, allow_redirects=True)
+        if r.status_code == 200:
+            target.extend(r.json())
+            print("\nDownloaded %s (%d entries)" % (url.split("/")[-1], len(target)))
+        else:
+            print("WARNING: Could not download %s (HTTP %d)" % (url, r.status_code))
+    except Exception as e:
+        print("WARNING: Could not download %s: %s" % (url, e))
 
-iphone_entries = []
-ipad_entries = []
-for entry in result:
-    model = entry["model"]
-    version = entry["version"]
-    build = entry["build"]
-    ipsw_url = entry["url"]
+# Step 3: Build a lookup: (model, build) -> index entry
+base_lookup = {}
+for entry in iphone_index + ipad_index:
+    key = (entry.get("model", ""), entry.get("build", ""))
+    if key not in base_lookup:
+        base_lookup[key] = entry
 
-    # Determine release tag
-    if model.startswith("iPhone"):
-        tag = "iphone-kernelcache"
-        target = iphone_entries
-    else:
-        tag = "ipad-kernelcache"
-        target = ipad_entries
+# Step 4: Generate alias entries
+new_iphone = []
+new_ipad = []
+existing_keys = set()
 
-    filename = "%s_%s.kernelcache" % (model_to_filename(model), version)
-    proxy_url = "https://github.lengye.top/download/%s/%s" % (tag, filename)
+# Also track what's already in existing indices
+for entry in iphone_index:
+    existing_keys.add(("iphone", entry["model"], entry["version"]))
+for entry in ipad_index:
+    existing_keys.add(("ipad", entry["model"], entry["version"]))
 
-    target.append({
-        "model": model,
-        "version": version,
-        "build": build,
-        "url": proxy_url,
-        "ipsw_url": ipsw_url,  # keep IPSW URL for download script
-        "size": 0,  # will be updated after extraction
-    })
+for clean_version, info in sorted(special_versions.items()):
+    prereq_build = info["prereq_build"]
 
-for name, entries in [("index_special_iphone.json", iphone_entries), ("index_special_ipad.json", ipad_entries)]:
-    with open(name, "w", encoding="utf-8") as f:
-        json.dump(entries, f, ensure_ascii=False, indent=2)
-    print("Saved %s (%d entries)" % (name, len(entries)))
+    for model in info["models"]:
+        base_key = (model, prereq_build)
+        base_entry = base_lookup.get(base_key)
+
+        if model.startswith("iPhone"):
+            device_type = "iphone"
+            target = new_iphone
+            tag = "iphone-kernelcache"
+        else:
+            device_type = "ipad"
+            target = new_ipad
+            tag = "ipad-kernelcache"
+
+        # Skip if already in existing index
+        if (device_type, model, clean_version) in existing_keys:
+            continue
+
+        if base_entry:
+            alias = {
+                "model": model,
+                "version": clean_version,
+                "build": base_entry["build"],
+                "size": base_entry["size"],
+                "url": "https://github.lengye.top/download/%s/%s_%s.kernelcache" % (
+                    tag, model_to_filename(model), base_entry["version"]
+                ),
+            }
+            target.append(alias)
+            existing_keys.add((device_type, model, clean_version))
+        else:
+            # No base entry found - this shouldn't happen for versions in range
+            print("  WARNING: No base entry for %s %s (build %s)" % (model, clean_version, prereq_build))
+
+print("\nGenerated alias entries:")
+print("  iPhone: %d new entries" % len(new_iphone))
+print("  iPad: %d new entries" % len(new_ipad))
+
+# Save
+with open("new_entries_iphone.json", "w", encoding="utf-8") as f:
+    json.dump(new_iphone, f, ensure_ascii=False, indent=2)
+with open("new_entries_ipad.json", "w", encoding="utf-8") as f:
+    json.dump(new_ipad, f, ensure_ascii=False, indent=2)
+
+if new_iphone:
+    print("\nSample iPhone aliases:")
+    for e in new_iphone[:3]:
+        print("  %s %s -> %s" % (e["model"], e["version"], e["url"]))
+if new_ipad:
+    print("\nSample iPad aliases:")
+    for e in new_ipad[:3]:
+        print("  %s %s -> %s" % (e["model"], e["version"], e["url"]))
